@@ -1,0 +1,212 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Idle Empire</title>
+
+<style>
+:root{
+--bg:#0b0f1a;--panel:#141a2e;--accent:#4cffd7;--accent2:#ff6bcb;--text:#e6ebff;
+}
+body{margin:0;background:radial-gradient(circle at top,#101737,var(--bg));
+font-family:system-ui;color:var(--text);text-align:center}
+.container{max-width:420px;margin:auto;padding:12px}
+h1{color:var(--accent);text-shadow:0 0 15px var(--accent)}
+.panel{background:var(--panel);border-radius:14px;padding:12px;margin:10px 0}
+button{width:100%;padding:14px;margin:6px 0;font-size:15px;border:none;
+border-radius:12px;cursor:pointer;
+background:linear-gradient(135deg,var(--accent),var(--accent2))}
+button:disabled{opacity:.4}
+.small{font-size:13px;opacity:.8}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ach{opacity:.4;font-size:14px}
+.ach.on{opacity:1;color:var(--accent)}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>🏰 Idle Empire</h1>
+
+<div class="panel">
+<div>Influence: <b id="inf">0</b></div>
+<div>Per Second: <b id="ps">0</b></div>
+<div>Research: <b id="res">0</b></div>
+<div>Legacy: <b id="leg">0</b></div>
+<div>Relics: <b id="rel">0</b></div>
+</div>
+
+<button onclick="clickGain()">GAIN INFLUENCE</button>
+
+<div class="panel">
+<button onclick="buyWorker()">Hire Worker (+1/sec)<br>
+Cost: <span id="wCost">10</span></button>
+</div>
+
+<div class="panel">
+<h3>🧬 Research Tree</h3>
+<div class="grid">
+<button onclick="buyTech('click')" id="t_click">Stronger Clicks</button>
+<button onclick="buyTech('worker')" id="t_worker">Efficient Workers</button>
+<button onclick="buyTech('offline')" id="t_off">Offline Boost</button>
+<button onclick="buyTech('events')" id="t_evt">Random Events</button>
+</div>
+</div>
+
+<div class="panel">
+<h3>🎲 Relics (Gacha)</h3>
+<button onclick="rollRelic()">Roll Relic (100 Research)</button>
+<div class="small" id="relicInfo"></div>
+</div>
+
+<div class="panel">
+<h3>🏆 Achievements</h3>
+<div id="achs"></div>
+</div>
+
+<div class="panel">
+<button onclick="prestige()">PRESTIGE (1k Influence)</button>
+<button onclick="ascend()">ASCEND (10 Legacy)</button>
+</div>
+
+<div class="panel">
+<button onclick="toggleMusic()">🎵 Music</button>
+</div>
+
+</div>
+
+<audio id="music" loop
+src="https://cdn.pixabay.com/audio/2022/08/02/audio_3b6cfbd7d1.mp3"></audio>
+
+<script>
+/* ================= SAVE ================= */
+const VERSION=1;
+let G=JSON.parse(localStorage.getItem("IE_SAVE"))||{
+v:VERSION,
+inf:0,res:0,workers:0,wCost:10,
+click:1,wp:1,legacy:0,relics:0,
+tech:{click:0,worker:0,offline:0,events:0},
+achs:{},
+pity:0,
+muted:false,
+last:Date.now()
+};
+
+/* =============== OFFLINE =============== */
+let dt=Math.min((Date.now()-G.last)/1000,3600);
+let offMult=1+(G.tech.offline*0.5);
+let offGain=dt*G.workers*G.wp*(1+G.legacy*.1)*offMult;
+if(offGain>0) alert(`While you were gone you earned ${Math.floor(offGain)} Influence`);
+G.inf+=offGain;
+
+/* =============== MUSIC ================= */
+const music=document.getElementById("music");
+if(!G.muted) music.play();
+function toggleMusic(){G.muted=!G.muted;G.muted?music.pause():music.play()}
+
+/* ============= ACHIEVEMENTS ============= */
+const ACHS={
+i100:{t:"100 Influence",b:()=>G.click*=1.1},
+w10:{t:"10 Workers",b:()=>G.wp*=1.1},
+p1:{t:"First Prestige",b:()=>G.legacy+=1},
+r1:{t:"First Relic",b:()=>G.click*=1.2}
+};
+function checkAchs(){
+if(G.inf>=100) unlock("i100");
+if(G.workers>=10) unlock("w10");
+if(G.legacy>=1) unlock("p1");
+if(G.relics>=1) unlock("r1");
+}
+function unlock(id){
+if(!G.achs[id]){
+G.achs[id]=1;ACHS[id].b();
+}}
+function drawAchs(){
+let d=document.getElementById("achs");d.innerHTML="";
+for(let k in ACHS){
+let e=document.createElement("div");
+e.className="ach"+(G.achs[k]?" on":"");
+e.textContent=ACHS[k].t;
+d.appendChild(e);
+}}
+
+/* ================ CORE ================= */
+function clickGain(){
+G.inf+=G.click*(1+G.legacy*.1);
+G.res+=0.1;
+checkAchs();
+}
+function buyWorker(){
+if(G.inf>=G.wCost){
+G.inf-=G.wCost;
+G.workers++;G.wCost=Math.floor(G.wCost*1.6);
+}}
+/* =============== TECH ================== */
+const TECH={
+click:{c:100,req:[],e:()=>G.click++},
+worker:{c:200,req:["click"],e:()=>G.wp*=1.5},
+offline:{c:300,req:["worker"],e:()=>{}},
+events:{c:400,req:["offline"],e:()=>{}}
+};
+function buyTech(t){
+let T=TECH[t];
+if(G.tech[t])return;
+if(T.req.some(r=>!G.tech[r]))return;
+if(G.res>=T.c){
+G.res-=T.c;G.tech[t]=1;T.e();
+}}
+/* =============== EVENTS ================= */
+function randomEvent(){
+if(!G.tech.events)return;
+if(Math.random()<0.1){
+let bonus=5;
+G.inf+=bonus*G.workers;
+alert("📈 Economic Boom!");
+}}
+/* =============== RELICS ================= */
+function rollRelic(){
+if(G.res<100)return;
+G.res-=100;G.pity++;
+let roll=Math.random();
+if(roll<0.05||G.pity>=10){
+G.relics++;G.pity=0;
+G.click*=1.5;
+document.getElementById("relicInfo").textContent="✨ Legendary Relic!";
+}else{
+document.getElementById("relicInfo").textContent="Nothing…";
+}}
+/* ============== PRESTIGE ================ */
+function prestige(){
+if(G.inf>=1000){
+G.legacy++;G.inf=0;G.workers=0;G.wCost=10;
+}}
+function ascend(){
+if(G.legacy>=10){
+G.relics+=5;G.legacy=0;G.click=1;G.wp=1;
+}}
+/* ================ LOOP ================== */
+setInterval(()=>{
+G.inf+=G.workers*G.wp*(1+G.legacy*.1);
+randomEvent();
+G.last=Date.now();
+localStorage.setItem("IE_SAVE",JSON.stringify(G));
+render();
+},1000);
+
+function render(){
+inf.textContent=Math.floor(G.inf);
+ps.textContent=Math.floor(G.workers*G.wp*(1+G.legacy*.1));
+res.textContent=Math.floor(G.res);
+leg.textContent=G.legacy;
+rel.textContent=G.relics;
+wCost.textContent=G.wCost;
+drawAchs();
+}
+render();drawAchs();
+</script>
+</body>
+</html>
+
